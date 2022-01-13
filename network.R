@@ -1,6 +1,7 @@
 library(STRINGdb)
 library(biomaRt)
 library(igraph)
+library(RJSONIO)
 
 #databases
 ciona <- STRINGdb$new(version='11',species=7719,score_threshold=200, input_directory="")
@@ -19,6 +20,18 @@ khid <- c('KH.C8.840','KH.L37.10','KH.C8.441','KH.L108.56','KH.C12.469','KH.C1.4
 	  'KH.L121.2','KH.L22.59','KH.L108.1','KH.C11.355','KH.C7.324','KH.C8.248',
 	  'KH.C9.371','KH.C10.209','KH.L37.33')
 
+khid <- paste0("KH2012:",khid)
+
+khname <- do.call(rbind,fromJSON('all_genes.json'))
+row.names(khname) <- khname[,1]
+
+genes <- khname[khid,]
+
+genes <- do.call(rbind,apply(
+	genes,1,
+	function(x) cbind(x[1],unlist(strsplit(x[2],'; ')))
+))
+
 #Gene names differ from KH2013 genome
 genes <- data.frame(khid=paste0("KH2013:",khid),name=genes)
 gene.names <- read.delim("gene_name.txt", row.names=1, stringsAsFactors=F)
@@ -30,13 +43,13 @@ regex <- paste0('^',gsub('\\(\\|','\\(',gsub(
   gsub(
     '/','|',
     gsub(
-      "([0-9/]+)","\\(\\1\\)",
-      gsub('([0-9])([0-9][A-Za-z])','\\1\\.?\\2',genes$UniqueNAME
+      "([0-9/]+)","\\(\\1\\)a?",
+      gsub('([0-9])([0-9][A-Za-z])','\\1\\.?\\2',genes[,2]#genes$UniqueNAME
     ))))),'$')
 
 #select proteins matching regex
 prots <- lapply(
-	setNames(regex,genes$UniqueNAME),
+	regex,#setNames(regex,genes$UniqueNAME),
 	function(x) mmProt[grep(x,mmProt$preferred_name,T),]
 )
 sapply(prots,dim)
@@ -72,7 +85,7 @@ genes.mm <- merge(genes,genes.mm,'ensembl_gene_id')
 
 genes.mmProt <- merge(mmProt,genes.mm,by.y='mmusculus_homolog_ensembl_peptide',by.x='protein_external_id')
 
-prots <- prots[,c(6,4,1:3,5,7:9)]
+prots <- genes.mmProt[,c(6,4,1:3,5,7:9)]
 names(prots) <- names(genes.mmProt)
 prots <- rbind(prots,genes.mmProt)
 prots <- prots[!duplicated(prots[,c(1,3:9)]),]
